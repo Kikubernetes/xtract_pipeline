@@ -1,8 +1,9 @@
 #!/bin/bash
-# This program is to convert DICOM to NIFTI and organize nifti_files.
+# This program is to convert DICOM to NIfTI and organize nifti_files.
+# NIfTI files can be organised too, but mixed condition(of DICOM and NIfTI) is not tested enough.
 # Please start in the directory containing original data named after ImageID.
-# Please back up your data before processing. If back-up is not available, comment out line 44, 49 & 129.
-#set -x
+# Note : Always make sure to back up your data before processing.
+set -x
 
 # Get the current directory path as ImagePath if ImagePath is not set
 if [[ -z $ImagePath ]] ;then
@@ -13,48 +14,8 @@ ImageID=${ImagePath##*/}
 export ImageID
 export ImagePath
 
-# If BIDS structure already exists (anat and dwi directories), organize files and exit
-if [ -d $ImagePath/anat ] && [ -d $ImagePath/dwi ];then
-
-    # Create nifti_data directory and move anatomical and diffusion files into it
-    mkdir nifti_data
-    mv anat/* nifti_data
-    mv dwi/* nifti_data
-
-    # Organize the NIFTI files in nifti_data directory
-    cd nifti_data
-    ss_organize_nifti.sh
-    cd ..
-
-    # if successful exit 0 ; if not successful exit 1
-    if [ "$(ls $ImagePath/nifti_data/anat/T1.nii*)" = '' ] || [ "$(ls $ImagePath/nifti_data/dwi/DWI*nii*)" = '' ]; then
-        echo "Something wrong. Aborted"
-        exit 1
-    else
-        echo "Finished."
-        echo "Please check if nifti files are named and classified correctly before proceeding to next step."
-
-        # Remove unnecessary files
-        other_niftis=$(find $ImagePath/nifti_data -mindepth 1 -maxdepth 1 \
-        \( -name "*.bval" -o -name "*.bvec" -o -name "*.json" -o -name "*.nii*" \) -print)
-
-        if [ -z "$other_niftis" ];then
-            :
-        else
-            rm $other_niftis
-            :
-        fi
-
-        # Remove empty original anat and dwi directories
-        rmdir $ImagePath/anat $ImagePath/dwi
-        exit 0
-    fi
-else
-    :
-fi
-
 # Define a function to search for a DICOM file in each directory
-# (stop searching when the first one is found)
+# (stop searching when the first one is found and set DCM_flag on)
 function dcmsearch()
     {
         # start search under the argument directory
@@ -76,6 +37,18 @@ function dcmsearch()
     }
 
 # Search for DICOM files in the ImagePath directory
+
+T1num=$( ls $ImagePath/nifti_data/anat/T1.nii* 2>/dev/null| wc -l )
+DWInum=$( ls $ImagePath/nifti_data/dwi/DWI*nii* 2>/dev/null | wc -l )
+
+# If BIDS structure already exists (anat and dwi directories), organize files and exit
+if [[ $T1num -ge 1 && $DWInum -ge 1 ]];then
+
+    echo "It seems files already exists and organized" 
+    echo "Stop further organizing and proceed to s2"
+    exit 0
+
+fi
 
 dcmsearch $ImagePath
 
@@ -102,6 +75,7 @@ if [ ! -z $DCM_flag ];then
 
 else
     # Create nifti_data directory and move existing NIFTI files if they exist
+
     mkdir nifti_data
     mv *.{bval,bvec,json,nii*} nifti_data 2>/dev/null
     cd nifti_data
@@ -111,25 +85,29 @@ else
 fi
 
 # Verify if the necessary T1 and DWI files are present, else terminate the script
-if [ "$(ls $ImagePath/nifti_data/anat/T1.nii*)" = '' ] || [ "$(ls $ImagePath/nifti_data/dwi/DWI*nii*)" = '' ]; then
+T1num=$( ls $ImagePath/nifti_data/anat/T1.nii* | wc -l )
+DWInum=$( ls $ImagePath/nifti_data/dwi/DWI*nii* | wc -l )
+if [ $T1num -lt 1 ] || [ $DWInum -lt 1 ]; then
     echo "Something wrong. Aborted"
     exit 1
+
+elif [ $T1num -gt 1 ] || [ $DWInum -gt 2 ]; then
+    echo "There seem many image files. Only files without numbers in their names will be used."
+
 else
     # Print completion message and prompt for verification of the output
     echo "Finished."
-    echo "Please check if nifti files are named and classified correctly before proceeding to next step."
-
-    # Remove unnecessary files
-    other_niftis=$(find $ImagePath/nifti_data -mindepth 1 -maxdepth 1 \
-    \( -name "*.bval" -o -name "*.bvec" -o -name "*.json" -o -name "*.nii*" \) -print)
-
-    if [ -z "$other_niftis" ];then
-        :
-    else
-        rm $other_niftis
-        :
-    fi
-
-
-    exit 0
 fi
+
+# Remove unnecessary files
+other_niftis=$(find $ImagePath/nifti_data -mindepth 1 -maxdepth 1 \
+\( -name "*.bval" -o -name "*.bvec" -o -name "*.json" -o -name "*.nii*" \) -print)
+
+if [ -z "$other_niftis" ];then
+    :
+else
+    rm $other_niftis
+    :
+fi
+
+exit 0
