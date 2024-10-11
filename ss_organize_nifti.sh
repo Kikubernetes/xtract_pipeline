@@ -1,8 +1,8 @@
 #/bin/bash
 
 # Check and organize nifti files
-# 20240212 by Kiku
 # Based on a script by Dr.Nemoto
+# 20240212 modified by Kikuko K
 
 # 画像が 3DT1, fMRI, DWI_AP, DWI_PA のどれかを判定
 # ルールは以下の通り
@@ -21,7 +21,6 @@ rm -rf ._* .DS_Store
 
 # サブディレクトリ作成
 [ ! -d anat ] && mkdir anat
-[ ! -d func ] && mkdir func
 [ ! -d dwi ] && mkdir dwi
 [ ! -d orig ] && mkdir orig
 
@@ -61,28 +60,10 @@ do
 			echo "Warning: Two T1 files exist!"
 		fi
         echo " "
-
-    # fMRI
-    # ファイル名を func に変更
-    # ファイルが2つあったら、Func, Func_02 に変更
-	elif [ "$dim4" -ge 130 ] && [ "$te" -gt 20 ] && [ "$te" -lt 40 ]; then
-		echo "$f seems fMRI file."
-        extension="${f#*.}"
-        if [ ! -e Func.nii* ]; then
-            mv $f Func.${extension}
-            mv ${img}.json Func.json
-            echo "$f was renamed as Func.${extension}"
-        else
-            mv $f Func_02.${extension}
-            mv ${img}.json Func_02.jsonn
-            echo "$f was renamed as Func_02.${extension}"
-            echo "Warning: Two fMRI files exist!"
-        fi
-        echo " "
 		
     # DWI
     # ファイル名を DWI_AP, DWI_PA に変更
-    # 2つあったらDWI_AP_02に変更
+    # 2つあったらDWI_AP_02, DWI_PA_02に変更
 	elif [ "$dim4" -gt 7 ] && [ "$te" -gt 50 ] && [ "$te" -lt 140 ]; then
 		echo "$f seems DWI file."
         extension="${f#*.}"
