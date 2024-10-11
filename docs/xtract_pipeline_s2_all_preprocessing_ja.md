@@ -3,38 +3,38 @@
 ### **Part 1: Image Pathの設定**
 
 この部分では、`ImagePath`が設定されていない場合、現在のディレクトリを`ImagePath`として使用します。
-
-`# ImagePathが設定されていない場合、現在のディレクトリを使用する`  
-`ImagePath=$PWD`
-
+```
+# ImagePathが設定されていない場合、現在のディレクトリを使用する
+ImagePath=$PWD
+```
 ---
 
 ### **Part 2: 必要なファイルの確認**
 
 ここでは、T1-weighted（T1）および拡散強調画像（DWI）のファイルが正しく存在するかを確認し、どちらかが見つからない場合は処理を終了します。
-
-`# 必要なファイルの存在を確認`  
-`ls $ImagePath/nifti_data/anat/T1.nii* | wc -l`  
-`ls $ImagePath/nifti_data/dwi/DWI*nii* | wc -l`
-
-`T1が1個、DWIが1個もしくは2個ならOK.それ以外ならファイルを確認する。実際に解析に使用されるのは、「ファイル名に数字が入っていないもの」になる。`
+```
+# 必要なファイルの存在を確認
+ls $ImagePath/nifti_data/anat/T1.nii* | wc -l
+ls $ImagePath/nifti_data/dwi/DWI*nii* | wc -l
+```
+T1が1個、DWIが1個もしくは2個ならOK.それ以外ならファイルを確認する。実際に解析に使用されるのは、「ファイル名に数字が入っていないもの」になります。
 
 ---
 
 ### **Part 3: システム情報の確認**
 
 この部分では、システムがLinuxかmacOSかを確認し、使用できるコア数（CPUのスレッド数）やメモリ容量を取得します。
-
-`# システムがLinuxまたはmacOSかを確認`  
-`uname # DarwinならMac、LinuxならLinux`  
-`# コア数とメモリ情報を取得`  
-`# Linuxの場合`  
-`nproc　# Linuxのコア数`  
-`cat /proc/meminfo | grep MemTotal | awk '{ printf("%d\n",$2/1024/1024) }' # Linuxのメモリ数`  
-`# Macの場合`  
-`sysctl -n hw.ncpu # Macのコア数`  
-`sysctl -n hw.memsize | awk '{ print $1/1024/1024/1024　# Macのメモリ数`
-
+```
+# システムがLinuxまたはmacOSかを確認  
+uname # DarwinならMac、LinuxならLinux  
+# コア数とメモリ情報を取得  
+# Linuxの場合  
+nproc　# Linuxのコア数  
+cat /proc/meminfo | grep MemTotal | awk '{ printf("%d\n",$2/1024/1024) }' # Linuxのメモリ数  
+# Macの場合  
+sysctl -n hw.ncpu # Macのコア数  
+sysctl -n hw.memsize | awk '{ print $1/1024/1024/1024 }　# Macのメモリ数
+```
 ---
 
 ### **Part 4: 最大実行ジョブ数の設定**
@@ -54,47 +54,47 @@ maxrunning=3
 ### **Part 5: 前処理用データの準備**
 
 この部分では、元のディレクトリから作業ディレクトリにファイルをコピーし、T1ファイルが必要に応じて圧縮されます。
+```
+# DWIデータ用のディレクトリを作成し、ファイルをコピー  
+cd $ImagePath  
+mkdir DWI  
+cp nifti_data/dwi/* DWI/  
+cp nifti_data/anat/* DWI/  
+cd DWI
 
-`# DWIデータ用のディレクトリを作成し、ファイルをコピー`  
-`cd $ImagePath`  
-`mkdir DWI`  
-`cp nifti_data/dwi/* DWI/`  
-`cp nifti_data/anat/* DWI/`  
-`cd DWI`
-
-`# T1ファイルが圧縮されていない場合は圧縮`  
-`gzip T1.nii`
-
+# T1ファイルが圧縮されていない場合は圧縮  
+gzip T1.nii
+```
 ---
 
 ### **Part 6: DWIファイルの解凍と前処理**
 
 この部分では、DWIファイルが圧縮されている場合に解凍し、その後前処理を行います。
-
-`# DWIファイルを必要に応じて解凍`  
-`gunzip DWI_AP.nii.gz`  
-`gunzip DWI_PA.nii.gz`
-
+```
+# DWIファイルを必要に応じて解凍  
+gunzip DWI_AP.nii.gz  
+gunzip DWI_PA.nii.gz
+```
 ---
 
 ### **Part 7: 様々な前処理条件に応じたファイルの処理**
 
 ここでは、DWIデータに異なるPE方向が含まれている場合、そのデータを前処理するための準備をします。
-
-`# DWIファイルのボリューム数を取得`  
-`fslval DWI_AP.nii* dim4`  
-`fslval DWI_PA.nii* dim4`
-
-`逆のPE方向（AP、PAなど）のデータが存在するか、そのボリューム数はいくつかによって10-12のいずれかの処理を行います。`  
+```
+# DWIファイルのボリューム数を取得  
+fslval DWI_AP.nii* dim4  
+fslval DWI_PA.nii* dim4
+```
+逆のPE方向（AP、PAなど）のデータが存在するか、そのボリューム数はいくつかによって10-12のいずれかの処理を行います。
 ---
 
 ### **Part 9: Get TotalReadoutTime**
 
 ここでは、`TotalReadoutTime`（リードアウト時間）をJSONファイルから取得し、次の処理で使用します。DWIファイルに複数のフェーズエンコーディング（PE）方向がある場合に必要な情報です。
-
-`# JSONファイルからTotalReadoutTimeを取得`  
-`cat DWI_AP.json | grep TotalReadoutTime | cut -d: -f2 | tr -d ','`
-
+```
+# JSONファイルからTotalReadoutTimeを取得  
+cat DWI_AP.json | grep TotalReadoutTime | cut -d: -f2 | tr -d ','
+```
 ---
 
 ### **Part 10: Apply Preprocessing Without Topup (Single PE Direction)**
@@ -103,10 +103,10 @@ DWIデータが一方向のPE（フェーズエンコーディング）しかな
 
 以下はAP方向のみ、`TotalReadoutTimeが0.04`の場合です。  
 ```
-# DWIの一方向PEの前処理`  
-mrconvert DWI_AP.nii dwi.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32`  
-dwidenoise dwi.mif dwi_den.mif`  
-mrdegibbs dwi_den.mif dwi_den_unr.mif -axes 0,1`  
+# DWIの一方向PEの前処理  
+mrconvert DWI_AP.nii dwi.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32  
+dwidenoise dwi.mif dwi_den.mif  
+mrdegibbs dwi_den.mif dwi_den_unr.mif -axes 0,1  
 dwifslpreproc dwi_den_unr.mif dwi_den_unr_preproc.mif -pe_dir AP -rpe_none -eddy_options " --slm=linear --repol --cnr_maps" -readout_time 0.04
 ```
 
@@ -169,24 +169,25 @@ dwifslpreproc temp02.mif dwi_den_unr_preproc.mif -rpe_header -eddy_options " --s
 ### **Part 13: Apply Bias Field Correction**
 
 前処理が完了したら、`b1`バイアスフィールド補正を適用します。これは、磁場不均一性による信号強度のばらつきを補正するための処理です。
-
-`# b1フィールド補正の適用`  
-`dwibiascorrect ants dwi_den_unr_preproc.mif dwi_den_unr_preproc_unbiased.mif`
-
+```
+# b1フィールド補正の適用  
+dwibiascorrect ants dwi_den_unr_preproc.mif dwi_den_unr_preproc_unbiased.mif
+```
 ---
 
 ### **Part 14: Final NIfTI Conversion**
 
 最後に、前処理が完了したデータをNIfTI形式に変換します。
-
-`# 最終的なNIfTI形式への変換`  
-`mrconvert dwi_den_unr_preproc_unbiased.mif dwi_den_unr_preproc_unbiased.nii.gz -export_grad_fsl SR.bvec SR.bval`
-
+```
+# 最終的なNIfTI形式への変換  
+mrconvert dwi_den_unr_preproc_unbiased.mif dwi_den_unr_preproc_unbiased.nii.gz -export_grad_fsl SR.bvec SR.bval
+```
 ---
 
 ### **Part 15: 不要データの削除**
 
 途中データを残しておきたくない場合は以下で削除できます。一旦削除すると復元不可能なのでよく確認してから行ってください。
-
-`# 不要ファイル削除`  
-`rm temp*.mif`
+```
+# 不要ファイル削除  
+rm temp*.mif
+```
