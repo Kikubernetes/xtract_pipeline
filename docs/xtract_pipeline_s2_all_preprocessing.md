@@ -1,187 +1,157 @@
-### **xtract\_pipeline s2\_all\_preprocessing.shの解説**
+# Explanation of xtract_pipeline s2_all_preprocessing.sh
+### Part 1: Setting the Image Path
+In this section, if ImagePath is not set, the current directory will be used as the ImagePath.
+```
+# If ImagePath is not set, use the current directory
+ImagePath=$PWD
+```
+### Part 2: Verifying Necessary Files
+Here, it checks if the T1-weighted (T1) and diffusion-weighted imaging (DWI) files are correctly present. If either one is missing, the process will terminate.
+```
+# Check if necessary files are present
+ls $ImagePath/nifti_data/anat/T1.nii* | wc -l
+ls $ImagePath/nifti_data/dwi/DWI*nii* | wc -l
+```
+If there is 1 T1 and 1 or 2 DWI files, it’s OK. Otherwise, check the files. The files actually used for analysis are the ones without numbers in the filename.
 
-### **Part 1: Image Pathの設定**
+### Part 3: Checking System Information
+In this section, the system checks whether it is running on Linux or macOS and retrieves the number of available cores (CPU threads) and the memory size.
+```
+# Check if the system is Linux or macOS
+uname # Darwin indicates Mac, Linux indicates Linux
+# Retrieve core count and memory information
+# For Linux
+nproc # Core count for Linux
+cat /proc/meminfo | grep MemTotal | awk '{ printf("%d\n",$2/1024/1024) }' # Memory size for Linux
+# For Mac
+sysctl -n hw.ncpu # Core count for Mac
+sysctl -n hw.memsize | awk '{ print $1/1024/1024/1024 } # Memory size for Mac
+```
+### Part 4: Setting Maximum Number of Concurrent Jobs
+Here, the maximum number of parallel jobs is set based on the system's resources.
 
-この部分では、`ImagePath`が設定されていない場合、現在のディレクトリを`ImagePath`として使用します。
+Unless the memory is very limited, setting it to core count minus 1 should be fine. Adjust accordingly if you are running other jobs in parallel. If the memory is smaller, it's safer to use just one core, regardless of the number of cores, although the execution will take longer.
 
-`# ImagePathが設定されていない場合、現在のディレクトリを使用する`  
-`ImagePath=$PWD`
+For environments outside of virtual ones, check the settings above.
 
----
-
-### **Part 2: 必要なファイルの確認**
-
-ここでは、T1-weighted（T1）および拡散強調画像（DWI）のファイルが正しく存在するかを確認し、どちらかが見つからない場合は処理を終了します。
-
-`# 必要なファイルの存在を確認`  
-`ls $ImagePath/nifti_data/anat/T1.nii* | wc -l`  
-`ls $ImagePath/nifti_data/dwi/DWI*nii* | wc -l`
-
-`T1が1個、DWIが1個もしくは2個ならOK.それ以外ならファイルを確認する。実際に解析に使用されるのは、「ファイル名に数字が入っていないもの」になる。`
-
----
-
-### **Part 3: システム情報の確認**
-
-この部分では、システムがLinuxかmacOSかを確認し、使用できるコア数（CPUのスレッド数）やメモリ容量を取得します。
-
-`# システムがLinuxまたはmacOSかを確認`  
-`uname # DarwinならMac、LinuxならLinux`  
-`# コア数とメモリ情報を取得`  
-`# Linuxの場合`  
-`nproc　# Linuxのコア数`  
-`cat /proc/meminfo | grep MemTotal | awk '{ printf("%d\n",$2/1024/1024) }' # Linuxのメモリ数`  
-`# Macの場合`  
-`sysctl -n hw.ncpu # Macのコア数`  
-`sysctl -n hw.memsize | awk '{ print $1/1024/1024/1024　# Macのメモリ数`
-
----
-
-### **Part 4: 最大実行ジョブ数の設定**
-
-ここでは、システムリソースに基づいて最大並列実行ジョブ数を設定します。
-
-よほどメモリが少なくない限りはコア数−１くらいでOKです。他のジョブを並行して行う場合などは適宜調整してください。メモリが4GB以下の場合、実行には時間がかかりますがコア数に関わらず1コアの方が安全です。
-
-例）
-
-仮想環境以外は上記で確認してください。
-
-Lin4Neuro（VirtualBox上やDocker上）の場合、CPU割り当てはVirtualBoxの設定→システム画面やdocker advanced settingsで確認、変更できます。これが4なら最大実行ジョブ数は3にします。
-
+For Lin4Neuro (on VirtualBox or Docker), you can check or modify CPU allocations in VirtualBox settings → system or Docker advanced settings. If this is set to e.g., 4, you can set the maximum number of concurrent jobs to 3.
+```
 maxrunning=3
-
----
-
-### **Part 5: 前処理用データの準備**
-
-この部分では、元のディレクトリから作業ディレクトリにファイルをコピーし、T1ファイルが必要に応じて圧縮されます。
-
-`# DWIデータ用のディレクトリを作成し、ファイルをコピー`  
-`cd $ImagePath`  
-`mkdir DWI`  
-`cp nifti_data/dwi/* DWI/`  
-`cp nifti_data/anat/* DWI/`  
-`cd DWI`
-
-`# T1ファイルが圧縮されていない場合は圧縮`  
-`gzip T1.nii`
-
----
-
-### **Part 6: DWIファイルの解凍と前処理**
-
-この部分では、DWIファイルが圧縮されている場合に解凍し、その後前処理を行います。
-
-`# DWIファイルを必要に応じて解凍`  
-`gunzip DWI_AP.nii.gz`  
-`gunzip DWI_PA.nii.gz`
-
----
-
-### **Part 7: 様々な前処理条件に応じたファイルの処理**
-
-ここでは、DWIデータに異なるPE方向が含まれている場合、そのデータを前処理するための準備をします。
-
-`# DWIファイルのボリューム数を取得`  
-`fslval DWI_AP.nii* dim4`  
-`fslval DWI_PA.nii* dim4`
-
-`逆のPE方向（AP、PAなど）のデータが存在するか、そのボリューム数はいくつかによって10-12のいずれかの処理を行います。`  
----
-
-### **Part 9: Get TotalReadoutTime**
-
-ここでは、`TotalReadoutTime`（リードアウト時間）をJSONファイルから取得し、次の処理で使用します。DWIファイルに複数のフェーズエンコーディング（PE）方向がある場合に必要な情報です。
-
-`# JSONファイルからTotalReadoutTimeを取得`  
-`cat DWI_AP.json | grep TotalReadoutTime | cut -d: -f2 | tr -d ','`
-
----
-
-### **Part 10: Apply Preprocessing Without Topup (Single PE Direction)**
-
-DWIデータが一方向のPE（フェーズエンコーディング）しかない場合、`topup`（位相エンコード方向の補正）なしで前処理を行います。
-
-以下はAP方向のみ、`TotalReadoutTimeが0.04`の場合です。  
-`# DWIの一方向PEの前処理`  
-`mrconvert DWI_AP.nii dwi.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32`  
-`dwidenoise dwi.mif dwi_den.mif`  
-`mrdegibbs dwi_den.mif dwi_den_unr.mif -axes 0,1`  
-`dwifslpreproc dwi_den_unr.mif dwi_den_unr_preproc.mif -pe_dir AP -rpe_none -eddy_options " --slm=linear --repol --cnr_maps" -readout_time 0.04`
-
-オプションの説明（Part11，12も同様です）  
--eddy_options、-topup_optionsは内部で使われているFSLのコマンドであるtopupやeddyにもともと存在するオプションを使うためのものです。下記以外にもFSLのユーザーガイドを見ると様々なオプションがあるので、必要に応じて引用符をつけて渡すことができます。注意：上記の見本のように、必ず引用符のあとに半角スペースが必要です。
-
 ```
--eddy_optionsの中身 
---slm=linear	軸数が少ない場合におすすめされていました。  
---repol 		動きが一定（4SD）以上に大きいスライスを捨てて置換する
---cnr_maps		QC用
-中間データをチェックのために残したい場合はdwifslpreprocのオプションがあります。
--nocleanup		一時ディレクトリを削除しない（容量が大きいので注意）
+### Part 5: Preparing Data for Preprocessing
+In this part, files are copied from the original directory to the working directory, and the T1 file is compressed if necessary.
 ```
----
+# Create a directory for DWI data and copy files
+cd $ImagePath
+mkdir DWI
+cp nifti_data/dwi/* DWI/
+cp nifti_data/anat/* DWI/
+cd DWI
 
-### **Part 11: Create b0 Pair for Topup (Two PE Directions)**
+# Compress the T1 file if it is not already compressed
+gzip T1.nii
+```
+### Part 6: Decompressing and Preprocessing the DWI File
+In this section, if the DWI file is compressed, it will be decompressed, followed by preprocessing.
+```
+# Decompress the DWI file if necessary
+gunzip DWI_AP.nii.gz
+gunzip DWI_PA.nii.gz
+```
+### Part 7: Processing Files Based on Various Preprocessing Conditions
+Here, preparations are made for preprocessing DWI data that contains different phase encoding (PE) directions.
+```
+# Retrieve the number of volumes in the DWI file
+fslval DWI_AP.nii* dim4
+fslval DWI_PA.nii* dim4
+```
+Depending on whether data with the opposite PE direction (such as AP, PA, etc.) exists and the number of volumes, either process 10-12 is executed.
 
-DWIデータが2つのPE方向（APとPA）からなる場合、それらのb0画像ペアを作成し、`topup`を使用して補正を行います。topupは`-topup_options “ --nthr=最大ジョブ数”を使うと時間短縮できます。以下はAP方向がメインの撮像方向、最大ジョブ数が3、TotalReadoutTimeが0.04の場合です。(メインの撮像方向がPAの場合はAPとPAを入れ替えます)`
+### Part 9: Get TotalReadoutTime
+Here, TotalReadoutTime (readout time) is extracted from the JSON file to be used in subsequent processing. This information is necessary when DWI files have multiple phase encoding (PE) directions.
+```
+# Extract TotalReadoutTime from the JSON file
+cat DWI_AP.json | grep TotalReadoutTime | cut -d: -f2 | tr -d ','
+```
+### Part 10: Apply Preprocessing Without Topup (Single PE Direction)
+If the DWI data has only one PE (phase encoding) direction, preprocessing is performed without topup (correction for phase encoding direction).
 
-`# AP方向のDWIの前処理`  
-`mrconvert DWI_AP.nii dwi.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32`  
-`dwidenoise dwi.mif dwi_den.mif`  
-`mrdegibbs dwi_den.mif dwi_den_unr.mif -axes 0,1`
+The following is an example for the AP direction only, assuming TotalReadoutTime is 0.04.
+```
+# Preprocessing DWI with single PE direction
+mrconvert DWI_AP.nii dwi.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32
+dwidenoise dwi.mif dwi_den.mif
+mrdegibbs dwi_den.mif dwi_den_unr.mif -axes 0,1
+dwifslpreproc dwi_den_unr.mif dwi_den_unr_preproc.mif -pe_dir AP -rpe_none -eddy_options " --slm=linear --repol --cnr_maps" -readout_time 0.04
+```
+#### Explanation of options (also applies to Parts 11 and 12):
 
-`# AP方向の画像からb0ボリューム（mean_b0.mif）を抽出`   
-`dwiextract dwi_den_unr.mif - -bzero | mrmath - mean mean_b0.mif -axis 3`
+The -eddy_options and -topup_options are used to pass options to the topup or eddy commands, which are part of FSL. There are various options available in the FSL user guide, and they can be passed with quotation marks as needed. Note: As shown in the example above, always include a space after the first quotation mark.
 
-`# PA方向のDWIの前処理`  
-`mrconvert DWI_PA.nii temp01.mif -datatype float32`  
-`mrdegibbs temp01.mif RPE_b0.mif -axes 0,1`
+Content of -eddy_options in example:
+```
+--slm=linear: Recommended when the number of axes is small.  
+--repol: Replaces slices when the motion exceeds 4 standard deviations.
+--cnr_maps: Used for quality control (QC).
+```
+If you want to keep intermediate data for checking, there is an option in dwifslpreproc.
+```
+-nocleanup: Prevents the deletion of temporary directories (be cautious, as this takes up significant space).
+```
+### Part 11: Create b0 Pair for Topup (Two PE Directions)
+When the DWI data consists of two phase encoding (PE) directions (AP and PA), a pair of b0 images is created, and correction is performed using topup. You can speed up topup by using the option -topup_options " --nthr=maximum number of jobs". Below is an example for DWI with AP as the primary direction, a maximum of 3 jobs, and TotalReadoutTime of 0.04 (if PA is the primary direction, swap AP and PA).
+```
+# Preprocessing DWI in the AP direction
+mrconvert DWI_AP.nii dwi.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32
+dwidenoise dwi.mif dwi_den.mif
+mrdegibbs dwi_den.mif dwi_den_unr.mif -axes 0,1
 
-`# topup補正のためにb0ペアを作成`  
-`mrcat mean_b0.mif RPE_b0.mif -axis 3 b0_pair.mif`
+# Extract b0 volume (mean_b0.mif) from the AP direction images
+dwiextract dwi_den_unr.mif - -bzero | mrmath - mean mean_b0.mif -axis 3
 
-`# dwifslpreproc`  
-`dwifslpreproc dwi_den_unr.mif dwi_den_unr_preproc.mif -pe_dir AP 　　-rpe_pair -se_epi b0_pair.mif -eddy_options " --slm=linear --repol --cnr_maps" -topup_options “ --nthr=3” -readout_time 0.04`
+# Preprocess DWI_PA to prepare for b0 extraction
+mrconvert DWI_PA.nii temp01.mif -fslgrad DWI_PA.bvec DWI_PA.bval -datatype float32
+dwidenoise temp01.mif temp02.mif
+mrdegibbs temp02.mif temp03.mif -axes 0,1
 
----
+# Extract and average b0 volumes from processed DWI_PA
+dwiextract temp03.mif - -bzero | mrmath - mean mean_b0_RPE.mif -axis 3
 
-### **Part 12: Apply Preprocessing with Both PE Directions (Full Volume)**
+# Concatenate mean b0 volumes from both directions to create b0_pair
+mrcat mean_b0.mif mean_b0_RPE.mif -axis 3 b0_pair.mif
 
-2つのPE方向からフルボリュームのDWIデータが得られる場合、これらを結合して前処理を行います。以下のようにjsonファイルをヘッダーに読み込むことで、適切なtopupとeddyの処理が可能です。jsonファイルに十分な情報がない場合はPart11と同様にマニュアルでb0 pair画像を作成してください。
+# Create a b0 pair for topup correction
+mrcat mean_b0.mif RPE_b0.mif -axis 3 b0_pair.mif
 
-`# DWIデータのフルボリュームの結合と前処理`  
-`mrconvert DWI_AP.nii DWI_AP.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32`  
-`mrconvert DWI_PA.nii DWI_PA.mif -fslgrad DWI_PA.bvec DWI_PA.bval -datatype float32`  
-`mrcat DWI_AP.mif DWI_PA.mif DWI.mif`  
-`dwidenoise DWI.mif temp01.mif`  
-`mrdegibbs temp01.mif temp02.mif -axes 0,1`  
-`dwifslpreproc temp02.mif dwi_den_unr_preproc.mif -rpe_header -eddy_options " --slm=linear --repol --cnr_maps" -topup_options “ --nthr=3” -readout_time 0.04`
-
----
-
-### **Part 13: Apply Bias Field Correction**
-
-前処理が完了したら、`b1`バイアスフィールド補正を適用します。これは、磁場不均一性による信号強度のばらつきを補正するための処理です。
-
-`# b1フィールド補正の適用`  
-`dwibiascorrect ants dwi_den_unr_preproc.mif dwi_den_unr_preproc_unbiased.mif`
-
----
-
-### **Part 14: Final NIfTI Conversion**
-
-最後に、前処理が完了したデータをNIfTI形式に変換します。
-
-`# 最終的なNIfTI形式への変換`  
-`mrconvert dwi_den_unr_preproc_unbiased.mif dwi_den_unr_preproc_unbiased.nii.gz -export_grad_fsl SR.bvec SR.bval`
-
----
-
-### **Part 15: 不要データの削除**
-
-途中データを残しておきたくない場合は以下で削除できます。一旦削除すると復元不可能なのでよく確認してから行ってください。
-
-`# 不要ファイル削除`  
-`rm temp*.mif`
+# dwifslpreproc
+dwifslpreproc dwi_den_unr.mif dwi_den_unr_preproc.mif -pe_dir AP -rpe_pair -se_epi b0_pair.mif -eddy_options " --slm=linear --repol --cnr_maps" -topup_options " --nthr=3" -readout_time 0.04
+```
+### Part 12: Apply Preprocessing with Both PE Directions (Full Volume)
+When full-volume DWI data is obtained from two PE directions, they are combined and preprocessing is performed. By loading the json files into the header as shown below, appropriate topup and eddy processing can be carried out. If the json file lacks sufficient information, manually create b0 pair images as described in Part 11.
+```
+# Combine full-volume DWI data and preprocess
+mrconvert DWI_AP.nii DWI_AP.mif -fslgrad DWI_AP.bvec DWI_AP.bval -datatype float32
+mrconvert DWI_PA.nii DWI_PA.mif -fslgrad DWI_PA.bvec DWI_PA.bval -datatype float32
+mrcat DWI_AP.mif DWI_PA.mif DWI.mif
+dwidenoise DWI.mif temp01.mif
+mrdegibbs temp01.mif temp02.mif -axes 0,1
+dwifslpreproc temp02.mif dwi_den_unr_preproc.mif -rpe_header -eddy_options " --slm=linear --repol --cnr_maps" -topup_options " --nthr=3" -readout_time 0.04
+```
+### Part 13: Apply Bias Field Correction
+Once preprocessing is complete, apply the b1 bias field correction. This step corrects for signal intensity variations due to magnetic field inhomogeneities using ANTS.
+```
+# Apply b1 field correction
+dwibiascorrect ants dwi_den_unr_preproc.mif dwi_den_unr_preproc_unbiased.mif
+```
+### Part 14: Final NIfTI Conversion
+Finally, the preprocessed data is converted into NIfTI format.
+```
+# Final conversion to NIfTI format
+mrconvert dwi_den_unr_preproc_unbiased.mif dwi_den_unr_preproc_unbiased.nii.gz -export_grad_fsl SR.bvec SR.bval
+```
+### Part 15: Deletion of Unnecessary Data
+If you do not wish to keep intermediate data, you can delete it using the commands below. Be sure to confirm carefully, as deletion is irreversible.
+```
+# Delete unnecessary files
+rm temp*.mif
+```
