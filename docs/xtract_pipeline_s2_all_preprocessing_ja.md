@@ -65,13 +65,15 @@ mkdir DWI
 cp nifti_data/dwi/* DWI/  
 cp nifti_data/anat/* DWI/  
 cd DWI
-
+```
+### **Part 6: 前処理用データの準備**
+```
 # T1ファイルが圧縮されていない場合は圧縮  
 gzip T1.nii
 ```
 ---
 
-### **Part 6: DWIファイルの解凍と前処理**
+### **Part 7: DWIファイルの解凍と前処理**
 
 この部分では、DWIファイルが圧縮されている場合に解凍し、その後前処理を行います。
 ```
@@ -81,7 +83,7 @@ gunzip DWI_PA.nii.gz
 ```
 ---
 
-### **Part 7: 様々な前処理条件に応じたファイルの処理**
+### **Part 8: 様々な前処理条件に応じたファイルの処理**
 
 ここでは、DWIデータに異なるPE方向が含まれている場合、そのデータを前処理するための準備をします。
 ```
@@ -89,7 +91,6 @@ gunzip DWI_PA.nii.gz
 fslval DWI_AP.nii* dim4  
 fslval DWI_PA.nii* dim4
 ```
-逆のPE方向（AP、PAなど）のデータが存在するか、そのボリューム数はいくつかによって10-12のいずれかの処理を行います。
 ---
 
 ### **Part 9: Get TotalReadoutTime**
@@ -100,6 +101,8 @@ fslval DWI_PA.nii* dim4
 cat DWI_AP.json | grep TotalReadoutTime | cut -d: -f2 | tr -d ','
 ```
 ---
+
+## 逆のPE方向（AP、PAなど）のデータが存在するか、そのボリューム数はいくつかによって10-12のいずれかの処理を行います。
 
 ### **Part 10: Apply Preprocessing Without Topup (Single PE Direction)**
 
