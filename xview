@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# viewing XTRACT_output in native space under the current directory
+# If you want to display fewer tracts, you can specify  
+# the lower and upper_threshould(default is 0.001 0.1)
+# Usage: xview [ Lowerthr Upperthr ]
+
+XTRACT_output=$(find . -name XTRACT_output -print | head -n 1)
+brain=$(find . -name \*FA.nii.gz | sed '2,$d')
+
+echo "XTRACT_output is $XTRACT_output"
+echo "brain is $brain"
+
+if [ -z "$XTRACT_output" ]; then 
+    echo "There seems no XTRACT_output..."
+    exit 1
+fi
+if [ -z "brain" ]; then 
+    echo "There seems no FA image..." 
+    exit 1
+fi
+
+if [ ! -z $1 ]; then
+    if [ ! -z $2 ]; then
+        xtract_viewer -dir $XTRACT_output -brain $brain -thr $1 $2
+    fi
+else
+    echo "If you want to change threshould, please specify lower and upper threshould"
+    echo "Will display with default"
+    xtract_viewer -dir $XTRACT_output -brain $brain
+fi
+
