@@ -1,45 +1,55 @@
 #!/bin/bash
 
-# This script is written by Kikuko Kaneko based on the 8th to 11th ABIS tutorial.
+# This script is written by Kikuko Kaneko.
 # Some part is contributed by Dr.Nemoto.
-# See usage below for descriptions and usage of the scripts.
-Version=20241005
+# It uses commands from dcm2niix, FSL and MRtrix3. ANTs is also required due to certain options.
+# Some parts of the script are based on the ABiS image analysis tutorial, but have been
+# modified at the author's discretion.
+# See usage below for descriptions and detailed description of the scripts.
+
+Version=20241011
 
 ###---------------------Variables------------------###
-NEW_FSL=""
+OLD_FSL=""
 #######################################################
 
 usage() {
     cat << EOF
-This script processes DICOM data from DICOM to XTRACT and XSTAT.
-It utilizes GPU and multicore processing when available.
-To execute only specific parts of the process, modify the "Switching area" in the script.
-Place DICOM files (DTI and 3DT1) or NIFTI files in a directory named with an image ID (e.g., sub001 or Image001).
-Reversed phase encoding images can be included but are not required.
-Save all relevant scripts in a directory included in the PATH (e.g., $HOME/bin) and grant execute permissions 
-(e.g., chmod 755 script_name).
-Navigate to the image directory and execute the script. (e.g., cd path_to_image_directory; s0_auto.sh)
-The output will be saved in the same directory, with DICOM files organized in a folder named "org_data".
-Note 1: This script assumes FSL version 6.0.6 or later. If you are using version 6.0.5 or earlier, 
-set the variable at the beginning of the script to NEW_FSL="no". This will perform topup without multithreading. 
-If using version 6.0.6 or later, leave it empty.
-Note 2: Proper naming and structure of files in step s1 is required for subsequent steps (from s2 onwards)
-to function correctly. Please run s1 first and verify the output before proceeding.
+This script processes data from DICOM to XTRACT and XSTAT.
+The series of processes are sequentially invoked from this script.
+Depending on the environment, it utilizes GPU and multicore processing if possible.
+If you only want to run part of the process, adjust by commenting out the Switching area in this script.
 
-このスクリプトは、DICOMデータからXTRACTおよびXSTATまでの処理を行います。
-環境に応じて、可能な場合にはGPUやマルチコアを使用します。
-処理過程の一部のみ実行したい場合はこのスクリプト中のSwitching areaで調整してください。
-画像ID名（例えばsub001やImage001）のディレクトリにDICOMファイル（DTIと3DT1）もしくはNIFTIファイルを用意して下さい。
-逆位相エンコード画像はあってもなくても大丈夫です。
-関連する全てのスクリプトをPATHに含まれているディレクトリ（例えば$HOME/bin）に保存して実行権限を与えます。
-（chmod 755 スクリプト名）
-画像ID名ディレクトリに移動してスクリプトを実行してください。
-（cd path_to_image_directory ;s0_auto.sh)
-結果は同じディレクトリ内に出力され、dicomファイルはその中の "org_data "というフォルダにまとめられます。
-注意1: FSL 6.0.6以降を前提としています。6.0.5以前のバージョンをお使いの場合はスクリプトの最初にある変数を
-NEW_FSL="no" としてください。マルチスレッドを使わずにtopupを行います。6.0.6以降であれば空欄のままにしておいてください。
-注意: s2以降の処理が行われるためには、s1でファイル名と構造が正しく整理される必要があります。初回はs1のみを実行し、
-意図した結果になっているかご確認ください。
+First, prepare the DTI and 3D TI images you want to process in a directory named after the image ID 
+(for example, sub001 or Image001).
+These can be either DICOM or NIfTI images. DICOM images do not need to be organized in advance.
+Mixing DICOM and NIfTI is not recommended.
+Place NIfTI files in the directory; if in BIDS format, keeping them in the anat and dwi folders is also fine.
+For DTI in NIfTI format, ensure that the json, bvec, and bval files output from dcm2niix are available.
+Phase encoding reverse images are optional; if available, TOPUP will be performed.
+
+There are two ways to execute:
+Method 1:
+Save all related scripts in a directory included in your PATH (e.g., $HOME/bin) and give them 
+permission to be exrcuted (i.e.chmod 755 script_name).
+Move to the image ID directory and run the script.
+(cd path_to_image_directory; s0_auto.sh)
+Method 2:
+Download this repository (via git clone or zip).
+Move to the image ID directory and run the script with the full path.
+Example:
+/home/kikuko/git/xtract_pipeline/s0_auto.sh v
+If this displays the version, remove the final 'v' to execute.
+/home/kikuko/git/xtract_pipeline/s0_auto.sh
+
+Results are saved in the same directory, and DICOM files are organized in a folder named "org_data."
+
+Note 1: Assumes FSL version 6.0.6 or later. (Check with the command: cat $FSL_DIR/etc/fslversion)
+If you are using a version prior to 6.0.5, please set the variable at the beginning of the script to
+OLD_FSL="yes" to use TOPUP without multithreading.
+If using version 6.0.6 or later, leave it blank.
+Note 2: Files and structures must be correctly organized by s1 for further processing.
+Run only s1 initially and verify that the results are as intended.
 EOF
 }
 

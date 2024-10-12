@@ -1,8 +1,7 @@
 #!/bin/bash
-# このプログラムは DICOM を NIfTI に変換し、ディレクトリを整理します。
-# s0_auto.shの子スクリプトですが、単独で実行することもできます。
+# このプログラムは DICOM を NIFTI に変換し、NIFTI ファイルを整理するものです。
 # 画像 ID の名前が付けられたオリジナルのデータがあるディレクトリで開始してください。
-# 処理を開始する前にデータのバックアップをおすすめします。
+# 処理を開始する前にデータのバックアップを取ってください。バックアップが取れない場合は、44行目、49行目、および129行目をコメントアウトしてください。
 #set -x
 
 # ImagePath が設定されていない場合は、現在のディレクトリパスを ImagePath として取得
@@ -21,29 +20,32 @@ if [ -d $ImagePath/anat ] && [ -d $ImagePath/dwi ];then
     mkdir nifti_data
     mv anat/* nifti_data
     mv dwi/* nifti_data
+
     # nifti_data ディレクトリ内の NIFTI ファイルを整理
     cd nifti_data
     ss_organize_nifti.sh
     cd ..
 
-    # ファイルができたかチェック
-    # 正常に完了した場合はexit 0、失敗した場合はexit 1
+    # 正常に完了した場合は終了 0；失敗した場合は終了 1
     if [ "$(ls $ImagePath/nifti_data/anat/T1.nii*)" = '' ] || [ "$(ls $ImagePath/nifti_data/dwi/DWI*nii*)" = '' ]; then
         echo "何か問題が発生しました。中止します。"
         exit 1
     else
         echo "完了しました。"
         echo "次のステップに進む前に、NIFTI ファイルが正しく名前付けされ、分類されているか確認してください。"
+
         # 不要なファイルを削除
         other_niftis=$(find $ImagePath/nifti_data -mindepth 1 -maxdepth 1 \
         \( -name "*.bval" -o -name "*.bvec" -o -name "*.json" -o -name "*.nii*" \) -print)
+
         if [ -z "$other_niftis" ];then
             :
         else
             rm $other_niftis
             :
         fi
-        # 空の anat および dwi ディレクトリを削除
+
+        # 元の空の anat および dwi ディレクトリを削除
         rmdir $ImagePath/anat $ImagePath/dwi
         exit 0
     fi
@@ -120,11 +122,13 @@ else
     # 不要なファイルを削除
     other_niftis=$(find $ImagePath/nifti_data -mindepth 1 -maxdepth 1 \
     \( -name "*.bval" -o -name "*.bvec" -o -name "*.json" -o -name "*.nii*" \) -print)
+
     if [ -z "$other_niftis" ];then
         :
     else
         rm $other_niftis
         :
     fi
+
     exit 0
 fi
